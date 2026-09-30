@@ -372,19 +372,19 @@
   <h2 class="nombre serif" data-key="nombre">Nombre Apellido</h2>
   <div class="edad" data-key="edad" style="display:none"></div>
   <div class="foto-pista">
-    <label class="marco-foto" data-clave="fotoDayana1" data-pie-llena="Feliz cumpleaños 💕" for="entradaFoto1" title="Añade una foto" role="button" tabindex="0" aria-label="Añadir una foto tuya">
+    <label class="marco-foto" data-clave="fotoDayana1" data-src="foto1.jpg" data-pie-llena="Feliz cumpleaños 💕" for="entradaFoto1" title="Añade una foto" role="button" tabindex="0" aria-label="Añadir una foto tuya">
       <span class="foto-ventana">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2 7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-12a7 7 0 1 0 0 14 7 7 0 0 0 0-14z"/></svg>
       </span>
     </label>
     <input type="file" id="entradaFoto1" accept="image/*" hidden>
-    <label class="marco-foto" style="--rot:2.6deg" data-clave="fotoDayana2" data-pie-llena="Qué buenos momentos ✨" for="entradaFoto2" title="Añade una foto" role="button" tabindex="0" aria-label="Añadir otro recuerdo">
+    <label class="marco-foto" style="--rot:2.6deg" data-clave="fotoDayana2" data-src="foto2.jpg" data-pie-llena="Qué buenos momentos ✨" for="entradaFoto2" title="Añade una foto" role="button" tabindex="0" aria-label="Añadir otro recuerdo">
       <span class="foto-ventana">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2 7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-12a7 7 0 1 0 0 14 7 7 0 0 0 0-14z"/></svg>
       </span>
     </label>
     <input type="file" id="entradaFoto2" accept="image/*" hidden>
-    <label class="marco-foto" style="--rot:-1.8deg" data-clave="fotoDayana3" data-pie-llena="Gracias por tanto ♥️" for="entradaFoto3" title="Añade una foto" role="button" tabindex="0" aria-label="Añadir otro recuerdo más">
+    <label class="marco-foto" style="--rot:-1.8deg" data-clave="fotoDayana3" data-src="foto3.jpg" data-pie-llena="Gracias por tanto ♥️" for="entradaFoto3" title="Añade una foto" role="button" tabindex="0" aria-label="Añadir otro recuerdo más">
       <span class="foto-ventana">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2 7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-12a7 7 0 1 0 0 14 7 7 0 0 0 0-14z"/></svg>
       </span>
@@ -693,10 +693,18 @@
         }
       };
 
+      // 1) Foto fija incrustada en la página (foto1.jpg, foto2.jpg, foto3.jpg):
+      //    se ve siempre, para todos, y no desaparece al recargar.
+      const fija = marco.dataset.src;
+      if (fija) {
+        const prueba = new Image();
+        prueba.onload = () => { if (!localStorage.getItem(CLAVE)) pintar(fija); };
+        prueba.src = fija;
+      }
+
+      // 2) Foto subida en este dispositivo: tiene prioridad sobre la fija
       try {
-        let guardada = localStorage.getItem(CLAVE);
-        // Migra la foto guardada con la clave antigua de la polaroid única
-        if (!guardada && CLAVE === "fotoDayana1") guardada = localStorage.getItem("fotoDayana");
+        const guardada = localStorage.getItem(CLAVE);
         if (guardada) pintar(guardada);
       } catch (e) { /* almacenamiento no disponible: se queda solo visual */ }
 
@@ -777,12 +785,35 @@
     });
     for (const nombre of candidatos) {
       const ok = await sondear(nombre);
-      if (ok) { audio.src = ok; hayMusica = true; pintarMusica(); return; }
+      if (ok) { audio.src = ok; hayMusica = true; pintarMusica(); intentarSonar(); return; }
     }
     pintarMusica();
     setTimeout(() => {
       if (!hayMusica) avisar("Para añadir música, deja un MP3 llamado " + (CONFIG.cancion || "cancion.mp3") + " junto a esta página.");
     }, 6000);
+  }
+
+  // Intenta arrancar la música; si el navegador lo bloquea,
+  // espera el primer toque/tecla/click del visitante.
+  function intentarSonar(){
+    if (!hayMusica || sonando) return;
+    audio.play().then(() => { sonando = true; pintarMusica(); }).catch(() => {});
+  }
+
+  function despertarMusica(){
+    const gestos = ["pointerdown", "keydown", "touchstart", "scroll"];
+    const intentar = () => {
+      if (!hayMusica) return;          // aún buscando la canción: seguimos esperando
+      if (sonando) { terminar(); return; }
+      audio.play().then(() => { sonando = true; pintarMusica(); terminar(); })
+        .catch(() => {});
+    };
+    const terminar = () => gestos.forEach(g => window.removeEventListener(g, intentar));
+    gestos.forEach(g => window.addEventListener(g, intentar, { passive: true, once: false }));
+    // Aviso amable si sigue sin sonar unos segundos
+    setTimeout(() => {
+      if (hayMusica && !sonando) avisar("Toca en cualquier parte para escuchar Las Mañanitas 🎵");
+    }, 3200);
   }
 
   selector.addEventListener("change", () => {
@@ -823,16 +854,7 @@
 
     document.getElementById("botonSorpresa2").addEventListener("click", celebrar);
     botonMusica.addEventListener("click", ponerMusica);
-
-    const despertar = () => {
-      if (hayMusica && !sonando) {
-        audio.play().then(() => { sonando = true; pintarMusica(); }).catch(() => {});
-      }
-      window.removeEventListener("pointerdown", despertar);
-      window.removeEventListener("keydown", despertar);
-    };
-    window.addEventListener("pointerdown", despertar);
-    window.addEventListener("keydown", despertar);
+    despertarMusica();
 
     if (!reduceMovimiento) setTimeout(celebrar, 900);
   }
